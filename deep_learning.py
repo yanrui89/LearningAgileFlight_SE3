@@ -15,7 +15,7 @@ batch_size = 100 # 100
 learning_rate = 1e-4
 num_cores =10 #5
 
-FILE = "nn_pre.pth"
+FILE = "/home/yanrui/storage/LearningAgileFlight_SE3/nn_pre.pth"
 model = torch.load(FILE)
 Every_reward = np.zeros((num_epochs,batch_size))
 
@@ -33,7 +33,7 @@ def grad(inputs, outputs, gra):
 
 if __name__ == '__main__':
     for k in range(5):
-        FILE = "nn_pre"
+        FILE = "/home/yanrui/storage/LearningAgileFlight_SE3/nn_pre.pth"
         model = torch.load(FILE)
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         Iteration = []

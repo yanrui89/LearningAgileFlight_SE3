@@ -2,6 +2,7 @@
 # this file is to do some calculation of solid geometry to do the collision detection of quadrotor
 # this file consists of several classes
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 ## return the maginitude of a vector
 def magni(vector):
@@ -166,3 +167,75 @@ class obstacle():
                 break
                         
         return collision
+    
+class obstacleNewReward(obstacle):
+    def __init__(self, point1, point2, point3, point4, wingrad):
+        super().__init__(point1 = point1,
+                         point2 = point2,
+                         point3 = point3,
+                         point4 = point4)              
+        
+        self.wingrad = wingrad  
+        self.height = 1.0
+        self.scaledMatrix = np.diag([self.wingrad, self.wingrad, self.height])    
+
+        self.midpoint1 = (self.point1 + self.point2)/2
+        self.midpoint2 = (self.point2 + self.point3)/2
+        self.midpoint3 = (self.point3 + self.point4)/2
+        self.midpoint4 = (self.point4 + self.point1)/2
+
+        self.R_max = 100
+        self.gamma = 10
+        self.alpha = 1
+        self.beta = 100
+         
+    def collis_det(self, vert_traj, horizon, quat):
+        ## define the state whether find corresponding plane
+        collision = 0
+        self.co = 0
+
+        ## judge if the trajectory traverse through the plane
+        if((np.dot(self.plane1.nor_vec(),vert_traj[0]-self.centroid)<0)):
+            return 0
+
+        ## judge whether the first plane is the traversal plane
+        # find two points of traverse
+        d_min = 0.2
+        curr_col1 = 0
+        curr_col2 = 0
+        curr_col3 = 0
+        curr_col4 = 0
+        for t in range(horizon):
+            if(np.dot(self.plane1.nor_vec(),vert_traj[t]-self.centroid)<0):
+                intersect = self.plane1.interpoint(vert_traj[t],vert_traj[t-1])
+                # judge whether they belong to plane1 and calculate the distance
+                curr_quat = quat[t,:]
+                curr_r_I2B = R.from_quat(np.array([curr_quat])).as_matrix().squeeze()
+                E = np.matmul(self.scaledMatrix, curr_r_I2B.transpose())
+                E = np.matmul(curr_r_I2B, E)
+
+      
+                curr_delta1 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint1 - intersect))
+                curr_delta2 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint2 - intersect))
+                curr_delta3 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint3 - intersect))
+                curr_delta4 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint4 - intersect))
+
+                if curr_delta1 < 1:
+                    self.co = 1
+                if curr_delta2 < 1:
+                    self.co = 1
+                if curr_delta3 < 1:
+                    self.co = 1
+                if curr_delta4 < 1:
+                    self.co = 1
+                    
+                curr_col1 = (self.gamma  * np.power(curr_delta1, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta1)))
+                curr_col2 = (self.gamma  * np.power(curr_delta2, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta2)))
+                curr_col3 = (self.gamma  * np.power(curr_delta3, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta3)))
+                curr_col4 = (self.gamma  * np.power(curr_delta4, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta4)))
+
+                collision = curr_col1 + curr_col2 + curr_col3 + curr_col4
+
+                break
+                        
+        return self.R_max - collision

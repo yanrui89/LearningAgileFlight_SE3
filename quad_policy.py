@@ -62,7 +62,8 @@ class run_quad:
         self.point2 = gate_point[3:6]
         self.point3 = gate_point[6:9]
         self.point4 = gate_point[9:12]        
-        self.obstacle1 = obstacle(self.point1,self.point2,self.point3,self.point4)
+        # self.obstacle1 = obstacle(self.point1,self.point2,self.point3,self.point4)
+        self.obstacle1 = obstacleNewReward(self.point1,self.point2,self.point3,self.point4, self.winglen/2)
     
     def objective( self,ini_state = None,tra_pos=None,tra_ang=None,t = 3, Ulast = None):
         if ini_state is None:
@@ -77,14 +78,15 @@ class run_quad:
         sol1 = self.uavoc1.ocSolver(ini_state=ini_state ,horizon=self.horizon,dt=self.dt, Ulast=Ulast)
         state_traj1 = sol1['state_traj_opt']
         self.traj = self.uav1.get_quadrotor_position(wing_len = self.winglen, state_traj = state_traj1)
+        self.traj_quaternion = sol1['state_traj_opt'][:, 6:10]
+        self.traj_pos = sol1['state_traj_opt'][:, :3]
         # calculate trajectory reward
         self.collision = 0
         self.path = 0
         ## detect whether there is detection
         self.co = 0
-        for c in range(4):
-            self.collision += self.obstacle1.collis_det(self.traj[:,3*(c+1):3*(c+2)],self.horizon)
-            self.co += self.obstacle1.co 
+        self.collision += self.obstacle1.collis_det(self.traj_pos, self.horizon, self.traj_quaternion)
+        self.co += self.obstacle1.co 
         for p in range(4):
             self.path += np.dot(self.traj[self.horizon-1-p,0:3]-self.goal_pos, self.traj[self.horizon-1-p,0:3]-self.goal_pos)
         reward = 1000 * self.collision - 0.5 * self.path + 100
