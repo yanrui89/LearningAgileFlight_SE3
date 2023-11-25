@@ -176,7 +176,7 @@ class obstacleNewReward(obstacle):
                          point4 = point4)              
         
         self.wingrad = wingrad  
-        self.height = 1.0
+        self.height = 0.3
         self.scaledMatrix = np.diag([self.wingrad, self.wingrad, self.height])    
 
         self.midpoint1 = (self.point1 + self.point2)/2
