@@ -85,11 +85,11 @@ class run_quad:
         self.path = 0
         ## detect whether there is detection
         self.co = 0
-        self.collision += self.obstacle1.collis_det(self.traj_pos, self.horizon, self.traj_quaternion)
+        self.collision += self.obstacle1.collis_det(self.traj_pos, self.horizon, self.traj_quaternion, t)
         self.co += self.obstacle1.co 
         for p in range(4):
             self.path += np.dot(self.traj[self.horizon-1-p,0:3]-self.goal_pos, self.traj[self.horizon-1-p,0:3]-self.goal_pos)
-        reward = 1000 * self.collision - 0.5 * self.path + 100
+        reward = 1 * self.collision - 0.5 * self.path
         return reward
     # --------------------------- solution and learning----------------------------------------
     ##solution and demo

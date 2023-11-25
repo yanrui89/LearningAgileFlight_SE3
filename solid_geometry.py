@@ -189,14 +189,14 @@ class obstacleNewReward(obstacle):
         self.alpha = 1
         self.beta = 100
          
-    def collis_det(self, vert_traj, horizon, quat):
+    def collis_det(self, vert_traj, horizon, quat, trav_t):
         ## define the state whether find corresponding plane
         collision = 0
         self.co = 0
 
         ## judge if the trajectory traverse through the plane
-        if((np.dot(self.plane1.nor_vec(),vert_traj[0]-self.centroid)<0)):
-            return 0
+        # if((np.dot(self.plane1.nor_vec(),vert_traj[0]-self.centroid)<0)):
+        #     return 0
 
         ## judge whether the first plane is the traversal plane
         # find two points of traverse
@@ -205,37 +205,82 @@ class obstacleNewReward(obstacle):
         curr_col2 = 0
         curr_col3 = 0
         curr_col4 = 0
-        for t in range(horizon):
-            if(np.dot(self.plane1.nor_vec(),vert_traj[t]-self.centroid)<0):
-                intersect = self.plane1.interpoint(vert_traj[t],vert_traj[t-1])
-                # judge whether they belong to plane1 and calculate the distance
-                curr_quat = quat[t,:]
-                curr_r_I2B = R.from_quat(np.array([curr_quat])).as_matrix().squeeze()
-                E = np.matmul(self.scaledMatrix, curr_r_I2B.transpose())
-                E = np.matmul(curr_r_I2B, E)
 
-      
-                curr_delta1 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint1 - intersect))
-                curr_delta2 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint2 - intersect))
-                curr_delta3 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint3 - intersect))
-                curr_delta4 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint4 - intersect))
+        trav_idx = trav_t / 0.1
+        pre_idx = int(np.floor(trav_idx))
+        # post_idx = np.floor(trav_idx)
+        # intersect = self.plane1.interpoint(vert_traj[t],vert_traj[t-1])
+        intersect = vert_traj[pre_idx]
+        # judge whether they belong to plane1 and calculate the distance
+        curr_quat = quat[pre_idx,:]
+        curr_r_I2B = R.from_quat(np.array([curr_quat])).as_matrix().squeeze()
+        # curr_r_I2B_chk = self.quaternion_rotation_matrix(curr_quat)
+        E = np.matmul(self.scaledMatrix, curr_r_I2B.transpose())
+        E = np.matmul(curr_r_I2B, E)
 
-                if curr_delta1 < 1:
-                    self.co = 1
-                if curr_delta2 < 1:
-                    self.co = 1
-                if curr_delta3 < 1:
-                    self.co = 1
-                if curr_delta4 < 1:
-                    self.co = 1
-                    
-                curr_col1 = (self.gamma  * np.power(curr_delta1, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta1)))
-                curr_col2 = (self.gamma  * np.power(curr_delta2, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta2)))
-                curr_col3 = (self.gamma  * np.power(curr_delta3, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta3)))
-                curr_col4 = (self.gamma  * np.power(curr_delta4, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta4)))
 
-                collision = curr_col1 + curr_col2 + curr_col3 + curr_col4
+        curr_delta1 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint1 - intersect))
+        curr_delta2 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint2 - intersect))
+        curr_delta3 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint3 - intersect))
+        curr_delta4 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint4 - intersect))
 
-                break
+        if curr_delta1 < 1:
+            self.co = 1
+        if curr_delta2 < 1:
+            self.co = 1
+        if curr_delta3 < 1:
+            self.co = 1
+        if curr_delta4 < 1:
+            self.co = 1
+            
+        curr_col1 = (self.gamma  * np.power(curr_delta1, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta1)))
+        curr_col2 = (self.gamma  * np.power(curr_delta2, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta2)))
+        curr_col3 = (self.gamma  * np.power(curr_delta3, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta3)))
+        curr_col4 = (self.gamma  * np.power(curr_delta4, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta4)))
+
+        collision = curr_col1 + curr_col2 + curr_col3 + curr_col4
+
                         
         return self.R_max - collision
+    
+    def quaternion_rotation_matrix(self,Q):
+        """
+        Covert a quaternion into a full three-dimensional rotation matrix.
+    
+        Input
+        :param Q: A 4 element array representing the quaternion (q0,q1,q2,q3) 
+    
+        Output
+        :return: A 3x3 element matrix representing the full 3D rotation matrix. 
+                This rotation matrix converts a point in the local reference 
+                frame to a point in the global reference frame.
+        """
+        mod_q = np.linalg.norm(Q)
+        mod_q = np.power(mod_q, 0.5)
+        # Extract the values from Q
+        q0 = Q[0]
+        q1 = Q[1]
+        q2 = Q[2]
+        q3 = Q[3]
+        
+        # First row of the rotation matrix
+        r00 = 2 * (q0 * q0 + q1 * q1) - 1
+        r01 = 2 * (q1 * q2 - q0 * q3)
+        r02 = 2 * (q1 * q3 + q0 * q2)
+        
+        # Second row of the rotation matrix
+        r10 = 2 * (q1 * q2 + q0 * q3)
+        r11 = 2 * (q0 * q0 + q2 * q2) - 1
+        r12 = 2 * (q2 * q3 - q0 * q1)
+        
+        # Third row of the rotation matrix
+        r20 = 2 * (q1 * q3 - q0 * q2)
+        r21 = 2 * (q2 * q3 + q0 * q1)
+        r22 = 2 * (q0 * q0 + q3 * q3) - 1
+        
+        # 3x3 rotation matrix
+        rot_matrix = np.array([[r00, r01, r02],
+                            [r10, r11, r12],
+                            [r20, r21, r22]])
+                                
+        return rot_matrix
