@@ -4,6 +4,7 @@ from quad_nn import *
 from quad_model import *
 from quad_policy import *
 from multiprocessing import Process, Array
+import sys
 # initialization
 
 
@@ -15,25 +16,32 @@ batch_size = 100 # 100
 learning_rate = 1e-4
 num_cores =10 #5
 
-FILE = "/home/yanrui/storage/LearningAgileFlight_SE3/nn_pre.pth"
+work_dir = "/home/yanrui/storage/LearningAgileFlight_SE3"
+FILE = work_dir + "/nn_pre.pth"
 model = torch.load(FILE)
 Every_reward = np.zeros((num_epochs,batch_size))
 
 
 # for multiprocessing, obtain the gradient
-def grad(inputs, outputs, gra):
+def grad(inputs, outputs, gra, reward_weight):
     gate_point = np.array([[-inputs[7]/2,0,1],[inputs[7]/2,0,1],[inputs[7]/2,0,-1],[-inputs[7]/2,0,-1]])
     gate1 = gate(gate_point)
     gate_point = gate1.rotate_y_out(inputs[8])
 
-    quad1 = run_quad(goal_pos=inputs[3:6],ini_r=inputs[0:3].tolist(),ini_q=toQuaternion(inputs[6],[0,0,1]))
+    quad1 = run_quad(goal_pos=inputs[3:6],ini_r=inputs[0:3].tolist(),ini_q=toQuaternion(inputs[6],[0,0,1]), reward_weight = reward_weight)
     quad1.init_obstacle(gate_point.reshape(12))
 
     gra[:] = quad1.sol_gradient(quad1.ini_state,outputs[0:3],outputs[3:6],outputs[6])
 
 if __name__ == '__main__':
+    reward_weight = float(sys.argv[1])
+    print(f"Running with reward weight {reward_weight}")
     for k in range(5):
-        FILE = "/home/yanrui/storage/LearningAgileFlight_SE3/nn_pre.pth"
+        work_dir = "/home/yanrui/storage/LearningAgileFlight_SE3"
+        FILE = work_dir + "/nn_pre.pth"
+        save_path = work_dir + "/reward_" + str(reward_weight)
+        if not os.path.isdir(save_path):
+            os.mkdir(save_path)
         model = torch.load(FILE)
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         Iteration = []
@@ -64,7 +72,7 @@ if __name__ == '__main__':
 
                 #calculate gradient and loss
                 for j in range(num_cores):
-                    p = Process(target=grad,args=(n_inputs[j],n_out[j],n_gra[j]))
+                    p = Process(target=grad,args=(n_inputs[j],n_out[j],n_gra[j], reward_weight))
                     p.start()
                     n_process.append(p)
         
@@ -88,7 +96,7 @@ if __name__ == '__main__':
             mean_reward = evalue/batch_size # evalue/int(batch_size/num_cores)
             Mean_r += [mean_reward]
             print('evaluation: ',mean_reward)
-            np.save('Iteration',Iteration)
-            np.save('Mean_Reward'+str(k),Mean_r)
-            np.save('Every_reward'+str(k),Every_reward)
-        torch.save(model, "nn_deep2_"+str(k))
+            np.save(save_path + '/Iteration',Iteration)
+            np.save(save_path + '/Mean_Reward'+str(k),Mean_r)
+            np.save(save_path + '/Every_reward'+str(k),Every_reward)
+        torch.save(model, save_path + "/nn_deep2_"+str(k))

@@ -14,7 +14,7 @@ def Rd2Rp(tra_ang):
 
 class run_quad:
     def __init__(self, goal_pos = [0, 8, 0], goal_atti = [0,[1,0,0]], ini_r=[0,-8,0]\
-            ,ini_v_I = [0.0, 0.0, 0.0], ini_q = toQuaternion(0.0,[3,3,5]),horizon = 50):
+            ,ini_v_I = [0.0, 0.0, 0.0], ini_q = toQuaternion(0.0,[3,3,5]),horizon = 50, reward_weight = 1000):
         ## definition 
         self.winglen = 1.5
         # goal
@@ -30,6 +30,7 @@ class run_quad:
         self.ini_state = self.ini_r + self.ini_v_I + self.ini_q + self.ini_w
         # set horizon
         self.horizon = horizon
+        self.reward_weight = reward_weight
 
         # --------------------------- create model1 ----------------------------------------
         self.uav1 = Quadrotor()
@@ -89,7 +90,7 @@ class run_quad:
         self.co += self.obstacle1.co 
         for p in range(4):
             self.path += np.dot(self.traj[self.horizon-1-p,0:3]-self.goal_pos, self.traj[self.horizon-1-p,0:3]-self.goal_pos)
-        reward = 1 * self.collision - 0.5 * self.path
+        reward = 1 * self.collision - (self.reward_weight * self.path)
         return reward
     # --------------------------- solution and learning----------------------------------------
     ##solution and demo
