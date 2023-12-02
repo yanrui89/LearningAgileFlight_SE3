@@ -14,7 +14,8 @@ def Rd2Rp(tra_ang):
 
 class run_quad:
     def __init__(self, goal_pos = [0, 8, 0], goal_atti = [0,[1,0,0]], ini_r=[0,-8,0]\
-            ,ini_v_I = [0.0, 0.0, 0.0], ini_q = toQuaternion(0.0,[3,3,5]),horizon = 50, reward_weight = 1000):
+            ,ini_v_I = [0.0, 0.0, 0.0], ini_q = toQuaternion(0.0,[3,3,5]),horizon = 50, 
+            reward_weight = 1000):
         ## definition 
         self.winglen = 1.5
         # goal
@@ -58,13 +59,13 @@ class run_quad:
 
     # define function
     # initialize the narrow window
-    def init_obstacle(self,gate_point):
+    def init_obstacle(self,gate_point, alpha, beta, gamma):
         self.point1 = gate_point[0:3]
         self.point2 = gate_point[3:6]
         self.point3 = gate_point[6:9]
         self.point4 = gate_point[9:12]        
         # self.obstacle1 = obstacle(self.point1,self.point2,self.point3,self.point4)
-        self.obstacle1 = obstacleNewReward(self.point1,self.point2,self.point3,self.point4, self.winglen/2)
+        self.obstacle1 = obstacleNewReward(self.point1,self.point2,self.point3,self.point4, self.winglen/2, alpha, beta, gamma)
     
     def objective( self,ini_state = None,tra_pos=None,tra_ang=None,t = 3, Ulast = None):
         if ini_state is None:
@@ -86,33 +87,34 @@ class run_quad:
         self.path = 0
         ## detect whether there is detection
         self.co = 0
-        self.collision += self.obstacle1.collis_det(self.traj_pos, self.horizon, self.traj_quaternion, t)
+        curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4 = self.obstacle1.collis_det(self.traj_pos, self.horizon, self.traj_quaternion, t)
+        self.collision += curr_collision
         self.co += self.obstacle1.co 
         for p in range(4):
             self.path += np.dot(self.traj[self.horizon-1-p,0:3]-self.goal_pos, self.traj[self.horizon-1-p,0:3]-self.goal_pos)
         reward = 1 * self.collision - (self.reward_weight * self.path)
-        return reward
+        return reward, self.collision, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, self.path
     # --------------------------- solution and learning----------------------------------------
     ##solution and demo
     def sol_gradient(self,ini_state = None,tra_pos =None,tra_ang=None,t=None,Ulast=None):
         tra_ang = np.array(tra_ang)
         tra_pos = np.array(tra_pos)
-        j = self.objective (ini_state,tra_pos,tra_ang,t)
+        j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path = self.objective (ini_state,tra_pos,tra_ang,t)
         ## fixed perturbation to calculate the gradient
         delta = 1e-3
-        drdx = np.clip(self.objective(ini_state,tra_pos+[delta,0,0],tra_ang, t,Ulast) - j,-0.5,0.5)*0.1
-        drdy = np.clip(self.objective(ini_state,tra_pos+[0,delta,0],tra_ang, t,Ulast) - j,-0.5,0.5)*0.1
-        drdz = np.clip(self.objective(ini_state,tra_pos+[0,0,delta],tra_ang, t,Ulast) - j,-0.5,0.5)*0.1
-        drda = np.clip(self.objective(ini_state,tra_pos,tra_ang+[delta,0,0], t,Ulast) - j,-0.5,0.5)*(1/(500*tra_ang[0]**2+5))
-        drdb = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,delta,0], t,Ulast) - j,-0.5,0.5)*(1/(500*tra_ang[1]**2+5))
-        drdc = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,0,delta], t,Ulast) - j,-0.5,0.5)*(1/(500*tra_ang[2]**2+5))
+        drdx = np.clip(self.objective(ini_state,tra_pos+[delta,0,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+        drdy = np.clip(self.objective(ini_state,tra_pos+[0,delta,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+        drdz = np.clip(self.objective(ini_state,tra_pos+[0,0,delta],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+        drda = np.clip(self.objective(ini_state,tra_pos,tra_ang+[delta,0,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[0]**2+5))
+        drdb = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,delta,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[1]**2+5))
+        drdc = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,0,delta], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[2]**2+5))
         drdt =0
-        if((self.objective(ini_state,tra_pos,tra_ang,t-0.1)-j)>2):
+        if((self.objective(ini_state,tra_pos,tra_ang,t-0.1)[0]-j)>2):
             drdt = -0.05
-        if((self.objective(ini_state,tra_pos,tra_ang,t+0.1)-j)>2):
+        if((self.objective(ini_state,tra_pos,tra_ang,t+0.1)[0]-j)>2):
             drdt = 0.05
         ## return gradient and reward (for deep learning)
-        return np.array([-drdx,-drdy,-drdz,-drda,-drdb,-drdc,-drdt,j])
+        return np.array([-drdx,-drdy,-drdz,-drda,-drdb,-drdc,-drdt,j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path])
 
 
     def optimize(self, t):

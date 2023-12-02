@@ -169,7 +169,7 @@ class obstacle():
         return collision
     
 class obstacleNewReward(obstacle):
-    def __init__(self, point1, point2, point3, point4, wingrad):
+    def __init__(self, point1, point2, point3, point4, wingrad, alpha, beta, gamma):
         super().__init__(point1 = point1,
                          point2 = point2,
                          point3 = point3,
@@ -185,9 +185,9 @@ class obstacleNewReward(obstacle):
         self.midpoint4 = (self.point4 + self.point1)/2
 
         self.R_max = 100
-        self.gamma = 10
-        self.alpha = 1
-        self.beta = 100
+        self.gamma = gamma #10
+        self.alpha = alpha #1
+        self.beta = beta #100
          
     def collis_det(self, vert_traj, horizon, quat, trav_t):
         ## define the state whether find corresponding plane
@@ -233,15 +233,13 @@ class obstacleNewReward(obstacle):
         if curr_delta4 < 1:
             self.co = 1
             
-        curr_col1 = (self.gamma  * np.power(curr_delta1, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta1)))
-        curr_col2 = (self.gamma  * np.power(curr_delta2, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta2)))
-        curr_col3 = (self.gamma  * np.power(curr_delta3, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta3)))
-        curr_col4 = (self.gamma  * np.power(curr_delta4, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta4)))
+        curr_col1 = (self.gamma  * np.power(curr_delta1, 2)) + (self.gamma  * np.power(curr_delta2, 2)) + (self.gamma  * np.power(curr_delta3, 2)) + (self.gamma  * np.power(curr_delta4, 2))
+        curr_col2 = (self.alpha * np.exp(self.beta*(1 - curr_delta1))) + (self.gamma  * np.power(curr_delta2, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta3))) + (self.alpha * np.exp(self.beta*(1 - curr_delta4)))
 
-        collision = curr_col1 + curr_col2 + curr_col3 + curr_col4
+        collision = curr_col1 + curr_col2
 
                         
-        return self.R_max - collision
+        return self.R_max - collision, curr_col1, curr_col2, self.co, curr_delta1, curr_delta2, curr_delta3, curr_delta4
     
     def quaternion_rotation_matrix(self,Q):
         """
