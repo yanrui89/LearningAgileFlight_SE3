@@ -16,12 +16,12 @@ batch_size = 100 # 100
 learning_rate = 1e-4
 num_cores =10 #5
 
-work_dir = "/home/yanrui/storage/LearningAgileFlight_SE3"
+work_dir = "/home/tlabstaff/storage/LearningAgileFlight_SE3"
 FILE = work_dir + "/nn_pre.pth"
 model = torch.load(FILE)
 Every_reward = np.zeros((num_epochs,batch_size))
-Every_totalReward = np.zeros((num_epochs,batch_size))
-Every_currReward = np.zeros((num_epochs,batch_size))
+Every_fullCollision = np.zeros((num_epochs,batch_size))
+Every_currCollision = np.zeros((num_epochs,batch_size))
 Every_collide = np.zeros((num_epochs,batch_size))
 Every_comp1 = np.zeros((num_epochs,batch_size))
 Every_comp2 = np.zeros((num_epochs,batch_size))
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     gamma = float(sys.argv[4])
     print(f"Running with reward weight {reward_weight}, alpha {alpha} beta {beta} and gamma {gamma}")
     for k in range(5):
-        work_dir = "/home/yanrui/storage/LearningAgileFlight_SE3"
+        work_dir = "/home/tlabstaff/storage/LearningAgileFlight_SE3"
         FILE = work_dir + "/nn_pre.pth"
         save_path = work_dir + "/reward_" + str(reward_weight) + "_gamma_" + str(gamma) + "_beta_" + str(beta) + "_alpha_" + str(alpha) 
         if not os.path.isdir(save_path):
@@ -102,11 +102,11 @@ if __name__ == '__main__':
                     optimizer.step()
                     evalue += n_gra[j][7]
                     Every_reward[epoch,j+num_cores*i]=n_gra[j][7]
-                    Every_totalReward[epoch,j+num_cores*i]=n_gra[j][8]
-                    Every_currReward[epoch,j+num_cores*i]=n_gra[j][9]
-                    Every_collide[epoch,j+num_cores*i]=n_gra[j][10]
-                    Every_comp1[epoch,j+num_cores*i]=n_gra[j][11]
-                    Every_comp2[epoch,j+num_cores*i]=n_gra[j][12]
+                    Every_fullCollision[epoch,j+num_cores*i]=n_gra[j][8]
+                    Every_currCollision[epoch,j+num_cores*i]=n_gra[j][9]
+                    Every_comp1[epoch,j+num_cores*i]=n_gra[j][10]
+                    Every_comp2[epoch,j+num_cores*i]=n_gra[j][11]
+                    Every_collide[epoch,j+num_cores*i]=n_gra[j][12]
                     Every_currDelta1[epoch,j+num_cores*i]=n_gra[j][13]
                     Every_currDelat2[epoch,j+num_cores*i]=n_gra[j][14]
                     Every_currDelta3[epoch,j+num_cores*i]=n_gra[j][15]
@@ -122,8 +122,8 @@ if __name__ == '__main__':
             np.save(save_path + '/Iteration',Iteration)
             np.save(save_path + '/Mean_Reward'+str(k),Mean_r)
             np.save(save_path + '/Every_reward'+str(k),Every_reward)
-            np.save(save_path + '/Every_totalreward'+str(k),Every_totalReward)
-            np.save(save_path + '/Every_currreward'+str(k),Every_currReward)
+            np.save(save_path + '/Every_totalreward'+str(k),Every_fullCollision)
+            np.save(save_path + '/Every_currreward'+str(k),Every_currCollision)
             np.save(save_path + '/Every_collide'+str(k),Every_collide)
             np.save(save_path + '/Every_comp1'+str(k),Every_comp1)
             np.save(save_path + '/Every_comp2'+str(k),Every_comp2)

@@ -1,6 +1,13 @@
 #!/bin/bash
 
-for i in 1000 500 250 100 50
+for i in 50
 do
-   python deep_learning.py $i
+   for alpha in 10 100
+   do
+      for beta in 10 100
+      do
+
+         python deep_learning.py $i $alpha $beta 10
+      done
+   done
 done
