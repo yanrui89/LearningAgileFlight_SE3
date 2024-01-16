@@ -116,7 +116,15 @@ class run_quad:
         ## return gradient and reward (for deep learning)
         return np.array([-drdx,-drdy,-drdz,-drda,-drdb,-drdc,-drdt,j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path])
 
+    def sol_test(self,ini_state = None,tra_pos =None,tra_ang=None,t=None,Ulast=None):
+        tra_ang = np.array(tra_ang)
+        tra_pos = np.array(tra_pos)
+        j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path = self.objective (ini_state,tra_pos,tra_ang,t)
 
+        traj = self.traj_pos
+
+        return np.array([j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path]), traj
+    
     def optimize(self, t):
         tra_pos = self.obstacle1.centroid
         tra_posx = self.obstacle1.centroid[0]

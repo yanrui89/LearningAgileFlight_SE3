@@ -3,6 +3,7 @@
 # this file consists of several classes
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import matplotlib.pyplot as plt
 
 ## return the maginitude of a vector
 def magni(vector):
@@ -220,9 +221,13 @@ class obstacleNewReward(obstacle):
 
 
         curr_delta1 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint1 - intersect))
+        curr_delta11 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.point1 - intersect))
         curr_delta2 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint2 - intersect))
+        curr_delta22 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.point2 - intersect))
         curr_delta3 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint3 - intersect))
+        curr_delta33 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.point3 - intersect))
         curr_delta4 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint4 - intersect))
+        curr_delta44 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.point4 - intersect))
 
         if curr_delta1 < 1:
             self.co = 1
@@ -232,9 +237,17 @@ class obstacleNewReward(obstacle):
             self.co = 1
         if curr_delta4 < 1:
             self.co = 1
+        if curr_delta11 < 1:
+            self.co = 1
+        if curr_delta22 < 1:
+            self.co = 1
+        if curr_delta33 < 1:
+            self.co = 1
+        if curr_delta44 < 1:
+            self.co = 1
             
-        curr_col1 = (self.gamma  * np.power(curr_delta1, 2)) + (self.gamma  * np.power(curr_delta2, 2)) + (self.gamma  * np.power(curr_delta3, 2)) + (self.gamma  * np.power(curr_delta4, 2))
-        curr_col2 = (self.alpha * np.exp(self.beta*(1 - curr_delta1))) + (self.gamma  * np.power(curr_delta2, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta3))) + (self.alpha * np.exp(self.beta*(1 - curr_delta4)))
+        curr_col1 = (self.gamma  * np.power(curr_delta1, 2)) + (self.gamma  * np.power(curr_delta2, 2)) + (self.gamma  * np.power(curr_delta3, 2)) + (self.gamma  * np.power(curr_delta4, 2)) + (self.gamma  * np.power(curr_delta11, 2)) + (self.gamma  * np.power(curr_delta22, 2)) + (self.gamma  * np.power(curr_delta33, 2)) + (self.gamma  * np.power(curr_delta44, 2))
+        curr_col2 = (self.alpha * np.exp(self.beta*(1 - curr_delta1))) + (self.gamma  * np.power(curr_delta2, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta3))) + (self.alpha * np.exp(self.beta*(1 - curr_delta4))) + (self.alpha * np.exp(self.beta*(1 - curr_delta11))) + (self.alpha * np.exp(self.beta*(1 - curr_delta22))) + (self.alpha * np.exp(self.beta*(1 - curr_delta33))) + (self.alpha * np.exp(self.beta*(1 - curr_delta44)))
 
         collision = curr_col1 + curr_col2
 

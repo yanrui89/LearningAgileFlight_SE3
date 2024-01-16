@@ -14,7 +14,7 @@ import sys
 num_epochs = 100
 batch_size = 100 # 100
 learning_rate = 1e-4
-num_cores =10 #5
+num_cores =20 #5
 
 work_dir = "/home/tlabstaff/storage/LearningAgileFlight_SE3"
 FILE = work_dir + "/nn_pre.pth"
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     beta = float(sys.argv[3])
     gamma = float(sys.argv[4])
     print(f"Running with reward weight {reward_weight}, alpha {alpha} beta {beta} and gamma {gamma}")
-    for k in range(5):
+    for k in range(1):
         work_dir = "/home/tlabstaff/storage/LearningAgileFlight_SE3"
         FILE = work_dir + "/nn_pre.pth"
         save_path = work_dir + "/reward_" + str(reward_weight) + "_gamma_" + str(gamma) + "_beta_" + str(beta) + "_alpha_" + str(alpha) 
