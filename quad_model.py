@@ -9,6 +9,7 @@ import math
 from scipy.spatial.transform import Rotation as R
 from solid_geometry import norm
 from math import sqrt
+from solid_geometry import magni
 
 # quadrotor (UAV) environment
 class Quadrotor:
@@ -118,7 +119,7 @@ class Quadrotor:
         self.U = self.T_B
         self.f = vertcat(dr_I, dv_I, dq, dw)
 
-    def initCost(self, wrt=None, wqt=None, wrf=None, wvf=None, wqf=None, wwf=None, \
+    def initCost(self, wrt=None, wqt=None, wrf=None, wvf=None, wqf=None, wwf=None, weptl = None, \
         wthrust=0.5,goal_pos=[0,9,5],goal_velo = [0,0,0],goal_atti=[0,[1,0,0]]):
         #traverse
         parameter = []
@@ -158,6 +159,12 @@ class Quadrotor:
             parameter += [self.wwf]
         else:
             self.wwf = wwf
+
+        if weptl is None:
+            self.weptl = SX.sym('weptl')
+            parameter += [self.weptl]
+        else:
+            self.weptl = weptl
 
         self.cost_auxvar = vcat(parameter)
 
@@ -211,6 +218,115 @@ class Quadrotor:
 
         self.tra_cost =   self.wrt * self.cost_r_I_t + \
                             self.wqt * self.cost_q_t
+        
+    def grad_TraCost(self, r_I_gra, t_r_I_gra, t_ang_gra, q_gra): # transforming Rodrigues to Quaternion is shown in get_input function
+        ## traverse cost
+        # traverse position in the world frame
+        self.cost_r_I_t_g = dot(r_I_gra - t_r_I_gra, r_I_gra - t_r_I_gra)
+
+        # traverse attitude error
+        self.tra_ang_theta, self.tra_axis = self.Rd2Rp2(t_ang_gra)
+        self.tra_q_g = self.toQuaternion_casa(self.tra_ang_theta,self.tra_axis)
+        tra_R_B_I = self.dir_cosine(self.tra_q_g)
+        R_B_I = self.dir_cosine(q_gra)
+        self.cost_q_t_g = trace(np.identity(3) - mtimes(transpose(tra_R_B_I), R_B_I))**2
+
+        self.tra_cost_g =   self.wrt * self.cost_r_I_t_g + \
+                            self.wqt * self.cost_q_t_g
+        
+
+        
+    def total_GraCost(self, r_I_gra, t_r_I_gra, t_ang_gra, q_gra):
+        # rx_g, ry_g, rz_g = SX.sym('rxg'), SX.sym('ryg'), SX.sym('rzg')
+        # self.r_I_gra = vertcat(rx_g, ry_g, rz_g)
+        self.grad_TraCost(r_I_gra, t_r_I_gra, t_ang_gra, q_gra)
+
+
+    def Rd2Rp2(self,tra_ang):
+        theta = 2*casadi.atan(self.magnit(tra_ang))
+        vector = self.norm_cas(tra_ang+ casadi.SX([1e-8,0,0]))
+        return theta,vector
+    
+    def magnit(self, ang):
+        mag_sq = casadi.dot(ang, ang)
+        mag = casadi.sqrt(mag_sq)
+        return mag
+    
+    def norm_cas(self, ang):
+        return ang/self.magnit(ang)
+    
+    def toQuaternion_casa(self,angle, dir):
+        # if type(dir) == list:
+        #     dir = numpy.array(dir)
+
+        dir = self.norm_cas(dir)
+        quat = casadi.SX.zeros(4)
+        quat[0] = casadi.cos(angle / 2)
+        quat[1:] = casadi.sin(angle / 2) * dir
+        return quat
+
+
+
+        
+    def setObstacle(self, obstacle ,point1, point2, point3, point4, gamma, alpha, beta, reward_weight, wingrad):
+        self.obstacle = obstacle
+        self.point1 = point1
+        self.point2 = point2
+        self.point3 = point3
+        self.point4 = point4
+        self.midpoint1 = (self.point1 + self.point2)/2
+        self.midpoint2 = (self.point2 + self.point3)/2
+        self.midpoint3 = (self.point3 + self.point4)/2
+        self.midpoint4 = (self.point4 + self.point1)/2
+        self.gamma = gamma
+        self.alpha = alpha
+        self.beta = beta
+        self.reward_weight = reward_weight
+        self.wingrad = wingrad
+        self.height = 0.3
+        self.R_max = 100.0
+        
+    def init_eptrajloss(self):
+        self.eptrajcost = self.collis_det_ep()
+        self.ep_cost = self.weptl * self.eptrajcost
+
+    def init_eppathloss(self, reward_weight):
+        self.goalcost_r_I_t = dot(self.r_I - self.goal_r_I, self.r_I - self.goal_r_I)
+
+        self.ep_path_cost = self.weptl * self.goalcost_r_I_t * reward_weight
+
+    def collis_det_ep(self):
+
+        self.scaledMatrix = casadi.SX([[self.wingrad,0,0],[0,self.wingrad, 0],[0,0,self.height]])
+        # self.scaledMatrix = np.diag([self.wingrad, self.wingrad, self.height])  
+        curr_r_I2B = self.dir_cosine(self.q)
+        # curr_r_I2B = self.quaternion_rotation_matrix(self.q)
+        # curr_r_I2B_chk = self.quaternion_rotation_matrix(curr_quat)
+        E = mtimes(self.scaledMatrix, curr_r_I2B)
+        E = mtimes(curr_r_I2B, E)
+
+        # mat_inverse = np.linalg.inv(E)
+        # mat_inverse2 = self.matrix_inverse(E)
+
+        curr_delta11 = mtimes(casadi.inv(E), (self.midpoint1 - self.r_I))
+        curr_delta1 = casadi.sqrt(curr_delta11[0]*curr_delta11[0] + curr_delta11[1]*curr_delta11[1] + curr_delta11[2]*curr_delta11[2])
+        curr_delta22 = mtimes(casadi.inv(E), (self.midpoint2 - self.r_I))
+        curr_delta2 = casadi.sqrt(curr_delta22[0]*curr_delta22[0] + curr_delta22[1]*curr_delta22[1] + curr_delta22[2]*curr_delta22[2])
+        curr_delta33 = mtimes(casadi.inv(E), (self.midpoint3 - self.r_I))
+        curr_delta3 = casadi.sqrt(curr_delta33[0]*curr_delta33[0] + curr_delta33[1]*curr_delta33[1] + curr_delta33[2]*curr_delta33[2])
+        curr_delta44 = mtimes(casadi.inv(E), (self.midpoint4 - self.r_I))
+        curr_delta4 = casadi.sqrt(curr_delta44[0]*curr_delta44[0] + curr_delta44[1]*curr_delta44[1] + curr_delta44[2]*curr_delta44[2])
+
+
+            
+        curr_col1 = (self.gamma  * casadi.power(curr_delta1, 2)) + (self.gamma  * casadi.power(curr_delta2, 2)) + (self.gamma  * casadi.power(curr_delta3, 2)) + (self.gamma  * casadi.power(curr_delta4, 2)) #+ (self.gamma  * np.power(curr_delta11, 2)) + (self.gamma  * np.power(curr_delta22, 2)) + (self.gamma  * np.power(curr_delta33, 2)) + (self.gamma  * np.power(curr_delta44, 2))
+        curr_col2 = (self.alpha * casadi.exp(self.beta*(1 - curr_delta1))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta2))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta3))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta4))) #+ (self.alpha * np.exp(self.beta*(1 - curr_delta11))) + (self.alpha * np.exp(self.beta*(1 - curr_delta22))) + (self.alpha * np.exp(self.beta*(1 - curr_delta33))) + (self.alpha * np.exp(self.beta*(1 - curr_delta44)))
+
+        collision = curr_col1 + curr_col2
+
+                        
+        return self.R_max - collision
+    
 
     def setDyn(self, dt):       
 

@@ -100,8 +100,17 @@ class OCSys:
         self.tra_cost = tra_cost
         self.tra_cost_fn = casadi.Function('tra_cost', [self.state, self.auxvar], [self.tra_cost])
 
+    def setEpCost(self, ep_cost, t = 3.0):
+        self.t = t
+        self.ep_cost = ep_cost
+        self.ep_cost_fn = casadi.Function('ep_cost', [self.state, self.auxvar], [self.ep_cost])
 
-    def ocSolver(self, ini_state, Ulast=None, horizon=None, auxvar_value=1, print_level=0, dt = 0.1,costate_option=0):
+    def setEpPathCost(self, ep_pathcost):
+        self.ep_pathcost = ep_pathcost
+        self.ep_path_cost_fn = casadi.Function('ep_cost', [self.state, self.auxvar], [self.ep_pathcost])
+
+
+    def ocSolver(self, ini_state, Ulast=None, horizon=None, auxvar_value=1, print_level=0, dt = 0.1,costate_option=0, incl_ep = 0):
         assert hasattr(self, 'state'), "Define the state variable first!"
         assert hasattr(self, 'control'), "Define the control variable first!"
         assert hasattr(self, 'dyn'), "Define the system dynamics first!"
@@ -131,6 +140,9 @@ class OCSys:
             Ulast = Ulast
         else:
             Ulast = np.array([0,0,0,0])
+
+        trav_idx = self.t / 0.1
+        pre_idx = int(np.floor(trav_idx))
         
         # Formulate the NLP
         for k in range(int(horizon)):
@@ -149,6 +161,14 @@ class OCSys:
             Ck = weight*self.tra_cost_fn(Xk, auxvar_value) + self.path_cost_fn(Xk, auxvar_value)\
                 +self.thrust_cost_fn(Uk, auxvar_value) + 1*dot(Uk-Ulast,Uk-Ulast)
             J = J + Ck
+
+            
+            if incl_ep ==1 and k == pre_idx:
+                J = J - self.ep_cost_fn(Xk, auxvar_value)
+
+            if incl_ep == 1:
+                if int(horizon) - k < 5 and int(horizon) - k > 0: 
+                    J = J + self.ep_path_cost_fn(Xk, auxvar_value)
 
             # New NLP variable for state at end of interval
             Xk = MX.sym('X_' + str(k + 1), self.n_state)
@@ -210,6 +230,8 @@ class OCSys:
                    "cost": sol['f'].full()}
 
         return opt_sol
+    
+    
 
     # def diffPMP(self):
     #     assert hasattr(self, 'state'), "Define the state variable first!"

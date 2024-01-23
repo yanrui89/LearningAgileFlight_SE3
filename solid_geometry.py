@@ -192,32 +192,38 @@ class obstacleNewReward(obstacle):
          
     def collis_det(self, vert_traj, horizon, quat, trav_t):
         ## define the state whether find corresponding plane
-        collision = 0
         self.co = 0
-
-        ## judge if the trajectory traverse through the plane
-        # if((np.dot(self.plane1.nor_vec(),vert_traj[0]-self.centroid)<0)):
-        #     return 0
-
-        ## judge whether the first plane is the traversal plane
-        # find two points of traverse
-        d_min = 0.2
-        curr_col1 = 0
-        curr_col2 = 0
-        curr_col3 = 0
-        curr_col4 = 0
 
         trav_idx = trav_t / 0.1
         pre_idx = int(np.floor(trav_idx))
         # post_idx = np.floor(trav_idx)
         # intersect = self.plane1.interpoint(vert_traj[t],vert_traj[t-1])
-        intersect = vert_traj[pre_idx]
+        X = vert_traj[pre_idx]
         # judge whether they belong to plane1 and calculate the distance
         curr_quat = quat[pre_idx,:]
-        curr_r_I2B = R.from_quat(np.array([curr_quat])).as_matrix().squeeze()
+
+        col_reward, curr_col1, curr_col2, self.co, curr_delta1, curr_delta2, curr_delta3, curr_delta4 = self.collis_det_ep(X, curr_quat)
+
+                        
+        return col_reward, curr_col1, curr_col2, self.co, curr_delta1, curr_delta2, curr_delta3, curr_delta4
+    
+    def collis_det_ep(self, X, curr_quat):
+  
+        # post_idx = np.floor(trav_idx)
+        # intersect = self.plane1.interpoint(vert_traj[t],vert_traj[t-1])
+        intersect = X
+        # judge whether they belong to plane1 and calculate the distance
+        # curr_r_I2B2 = R.from_quat(np.array([curr_quat])).as_matrix().squeeze()
+        # curr_r_I2B = self.quaternion_rotation_matrix(curr_quat)
+        test_quat = np.array([curr_quat[1], curr_quat[2], curr_quat[3], curr_quat[0]])
+        curr_r_I2B = self.quaternion_rotation_matrix(test_quat)
+        # test = self.dir_cosine(curr_quat)
         # curr_r_I2B_chk = self.quaternion_rotation_matrix(curr_quat)
         E = np.matmul(self.scaledMatrix, curr_r_I2B.transpose())
         E = np.matmul(curr_r_I2B, E)
+
+        # mat_inverse = np.linalg.inv(E)
+        # mat_inverse2 = self.matrix_inverse(E)
 
 
         curr_delta1 = np.linalg.norm(np.matmul(np.linalg.inv(E), self.midpoint1 - intersect))
@@ -247,7 +253,7 @@ class obstacleNewReward(obstacle):
             self.co = 1
             
         curr_col1 = (self.gamma  * np.power(curr_delta1, 2)) + (self.gamma  * np.power(curr_delta2, 2)) + (self.gamma  * np.power(curr_delta3, 2)) + (self.gamma  * np.power(curr_delta4, 2)) + (self.gamma  * np.power(curr_delta11, 2)) + (self.gamma  * np.power(curr_delta22, 2)) + (self.gamma  * np.power(curr_delta33, 2)) + (self.gamma  * np.power(curr_delta44, 2))
-        curr_col2 = (self.alpha * np.exp(self.beta*(1 - curr_delta1))) + (self.gamma  * np.power(curr_delta2, 2)) + (self.alpha * np.exp(self.beta*(1 - curr_delta3))) + (self.alpha * np.exp(self.beta*(1 - curr_delta4))) + (self.alpha * np.exp(self.beta*(1 - curr_delta11))) + (self.alpha * np.exp(self.beta*(1 - curr_delta22))) + (self.alpha * np.exp(self.beta*(1 - curr_delta33))) + (self.alpha * np.exp(self.beta*(1 - curr_delta44)))
+        curr_col2 = (self.alpha * np.exp(self.beta*(1 - curr_delta1))) + (self.alpha * np.exp(self.beta*(1 - curr_delta2))) + (self.alpha * np.exp(self.beta*(1 - curr_delta3))) + (self.alpha * np.exp(self.beta*(1 - curr_delta4))) + (self.alpha * np.exp(self.beta*(1 - curr_delta11))) + (self.alpha * np.exp(self.beta*(1 - curr_delta22))) + (self.alpha * np.exp(self.beta*(1 - curr_delta33))) + (self.alpha * np.exp(self.beta*(1 - curr_delta44)))
 
         collision = curr_col1 + curr_col2
 
@@ -266,8 +272,8 @@ class obstacleNewReward(obstacle):
                 This rotation matrix converts a point in the local reference 
                 frame to a point in the global reference frame.
         """
-        mod_q = np.linalg.norm(Q)
-        mod_q = np.power(mod_q, 0.5)
+        # mod_Q = np.sqrt(Q[0]*Q[0] + Q[1]*Q[1] + Q[2]*Q[2] + Q[3]*Q[3])
+        Q = Q / np.linalg.norm(Q)
         # Extract the values from Q
         q0 = Q[0]
         q1 = Q[1]
@@ -275,19 +281,19 @@ class obstacleNewReward(obstacle):
         q3 = Q[3]
         
         # First row of the rotation matrix
-        r00 = 2 * (q0 * q0 + q1 * q1) - 1
-        r01 = 2 * (q1 * q2 - q0 * q3)
-        r02 = 2 * (q1 * q3 + q0 * q2)
+        r00 = 1 - 2*q1*q1 - 2*q2*q2
+        r01 = 2*q0*q1 - 2*q2*q3
+        r02 = 2*q0*q2 + 2*q1*q3
         
         # Second row of the rotation matrix
-        r10 = 2 * (q1 * q2 + q0 * q3)
-        r11 = 2 * (q0 * q0 + q2 * q2) - 1
-        r12 = 2 * (q2 * q3 - q0 * q1)
+        r10 = 2*q0*q1 + 2*q2*q3 
+        r11 = 1 - 2*q0*q0 - 2*q2*q2
+        r12 = 2*q1*q2 - 2*q0*q3
         
         # Third row of the rotation matrix
-        r20 = 2 * (q1 * q3 - q0 * q2)
-        r21 = 2 * (q2 * q3 + q0 * q1)
-        r22 = 2 * (q0 * q0 + q3 * q3) - 1
+        r20 = 2*q0*q2 - 2*q3*q1
+        r21 = 2*q1*q2 + 2*q3*q0
+        r22 = 1 - 2*q0*q0 - 2*q1*q1
         
         # 3x3 rotation matrix
         rot_matrix = np.array([[r00, r01, r02],
@@ -295,3 +301,43 @@ class obstacleNewReward(obstacle):
                             [r20, r21, r22]])
                                 
         return rot_matrix
+    
+    def dir_cosine(self, q): # world frame to body frame
+        q = q / np.linalg.norm(q)
+        C_B_I = np.vstack((
+            np.hstack((1 - 2 * (q[2] ** 2 + q[3] ** 2), 2 * (q[1] * q[2] + q[0] * q[3]), 2 * (q[1] * q[3] - q[0] * q[2]))),
+            np.hstack((2 * (q[1] * q[2] - q[0] * q[3]), 1 - 2 * (q[1] ** 2 + q[3] ** 2), 2 * (q[2] * q[3] + q[0] * q[1]))),
+            np.hstack((2 * (q[1] * q[3] + q[0] * q[2]), 2 * (q[2] * q[3] - q[0] * q[1]), 1 - 2 * (q[1] ** 2 + q[2] ** 2)))
+        ))
+        return C_B_I
+    
+
+    def matrix_minor(self, matrix, row, col):
+        """Calculate the minor of a matrix by excluding the specified row and column."""
+        return [[matrix[i][j] for j in range(len(matrix[i])) if j != col] for i in range(len(matrix)) if i != row]
+
+    def matrix_determinant(self,matrix):
+        """Calculate the determinant of a 2x2 matrix."""
+        return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
+
+    def matrix_inverse(self, matrix):
+        """Calculate the inverse of a 3x3 matrix."""
+        det = (
+            matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[2][1] * matrix[1][2]) -
+            matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0]) +
+            matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0])
+        )
+        print(det)
+        if det == 0:
+            raise ValueError("Matrix is not invertible.")
+
+        cofactors = [
+            [self.matrix_determinant(self.matrix_minor(matrix, i, j)) * ((-1) ** (i + j)) for j in range(3)]
+            for i in range(3)
+        ]
+
+        adjugate = [[cofactors[j][i] for j in range(3)] for i in range(3)]
+
+        inverse = [[adjugate[i][j] / det for j in range(3)] for i in range(3)]
+
+        return inverse

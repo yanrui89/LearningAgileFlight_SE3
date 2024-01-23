@@ -15,7 +15,7 @@ def Rd2Rp(tra_ang):
 class run_quad:
     def __init__(self, goal_pos = [0, 8, 0], goal_atti = [0,[1,0,0]], ini_r=[0,-8,0]\
             ,ini_v_I = [0.0, 0.0, 0.0], ini_q = toQuaternion(0.0,[3,3,5]),horizon = 50, 
-            reward_weight = 1000):
+            reward_weight = 1000, ep_beta = 0.01):
         ## definition 
         self.winglen = 1.5
         # goal
@@ -32,12 +32,14 @@ class run_quad:
         # set horizon
         self.horizon = horizon
         self.reward_weight = reward_weight
+        self.beta = ep_beta
+        print(f"ep_beta is {ep_beta}")
 
         # --------------------------- create model1 ----------------------------------------
         self.uav1 = Quadrotor()
         jx, jy, jz = 0.0023, 0.0023, 0.004
         self.uav1.initDyn(Jx=0.0023,Jy=0.0023,Jz=0.004,mass=0.5,l=0.35,c=0.0245) # hb quadrotor
-        self.uav1.initCost(wrt=5,wqt=80,wthrust=0.1,wrf=5,wvf=5,wqf=0,wwf=3,goal_pos=self.goal_pos) # wthrust = 0.1
+        self.uav1.initCost(wrt=5,wqt=80,wthrust=0.1,wrf=5,wvf=5,wqf=0,wwf=3, weptl = self.beta, goal_pos=self.goal_pos) # wthrust = 0.1
         self.uav1.init_TraCost()
 
         # --------------------------- create PDP object1 ----------------------------------------
@@ -65,9 +67,15 @@ class run_quad:
         self.point3 = gate_point[6:9]
         self.point4 = gate_point[9:12]        
         # self.obstacle1 = obstacle(self.point1,self.point2,self.point3,self.point4)
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
         self.obstacle1 = obstacleNewReward(self.point1,self.point2,self.point3,self.point4, self.winglen/2, alpha, beta, gamma)
+
+    def setObstacle(self):
+        self.uav1.setObstacle(self.obstacle1, self.point1, self.point2, self.point3, self.point4, self.gamma, self.alpha, self.beta, self.reward_weight, self.winglen/2)
     
-    def objective( self,ini_state = None,tra_pos=None,tra_ang=None,t = 3, Ulast = None):
+    def objective( self,ini_state = None,tra_pos=None,tra_ang=None,t = 3, Ulast = None, incl_ep = 0):
         if ini_state is None:
             ini_state = self.ini_state
         t = round(t,1)
@@ -76,8 +84,14 @@ class run_quad:
         # define traverse cost
         self.uav1.init_TraCost(tra_pos,tra_atti)
         self.uavoc1.setTraCost(self.uav1.tra_cost, t)
+        if incl_ep == 1:
+            #include the ep loss in the loss function
+            self.uav1.init_eptrajloss()
+            self.uavoc1.setEpCost(self.uav1.ep_cost, t)
+            self.uav1.init_eppathloss(self.reward_weight)
+            self.uavoc1.setEpPathCost(self.uav1.ep_path_cost)
         # obtain solution of trajectory
-        sol1 = self.uavoc1.ocSolver(ini_state=ini_state ,horizon=self.horizon,dt=self.dt, Ulast=Ulast)
+        sol1 = self.uavoc1.ocSolver(ini_state=ini_state ,horizon=self.horizon,dt=self.dt, Ulast=Ulast, incl_ep = incl_ep)
         state_traj1 = sol1['state_traj_opt']
         self.traj = self.uav1.get_quadrotor_position(wing_len = self.winglen, state_traj = state_traj1)
         self.traj_quaternion = sol1['state_traj_opt'][:, 6:10]
@@ -100,14 +114,31 @@ class run_quad:
         tra_ang = np.array(tra_ang)
         tra_pos = np.array(tra_pos)
         j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path = self.objective (ini_state,tra_pos,tra_ang,t)
+        traj_pos_free = self.traj_pos
+        traj_quat_free = self.traj_quaternion
+        trav_idx = t / 0.1
+        pre_idx = int(np.floor(trav_idx))
+        rp_free, ra_free = self.grad_computation(traj_pos_free, traj_quat_free, pre_idx, tra_pos,tra_ang,t)
+
+        j_fix, collision_full_fix, curr_collision_fix, comp1_fix, comp2_fix, collide_fix, curr_delta1_fix, curr_delta2_fix, curr_delta3_fix, curr_delta4_fix, path_fix = self.objective (ini_state,tra_pos,tra_ang,t, incl_ep = 1)
+        traj_pos_perturbed = self.traj_pos
+        traj_quat_perturbed = self.traj_quaternion
+        rp_perturbed, ra_perturbed = self.grad_computation(traj_pos_perturbed, traj_quat_perturbed, pre_idx, tra_pos,tra_ang,t)
         ## fixed perturbation to calculate the gradient
         delta = 1e-3
-        drdx = np.clip(self.objective(ini_state,tra_pos+[delta,0,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
-        drdy = np.clip(self.objective(ini_state,tra_pos+[0,delta,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
-        drdz = np.clip(self.objective(ini_state,tra_pos+[0,0,delta],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
-        drda = np.clip(self.objective(ini_state,tra_pos,tra_ang+[delta,0,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[0]**2+5))
-        drdb = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,delta,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[1]**2+5))
-        drdc = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,0,delta], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[2]**2+5))
+        # drdx = np.clip(self.objective(ini_state,tra_pos+[delta,0,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+        # drdy = np.clip(self.objective(ini_state,tra_pos+[0,delta,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+        # drdz = np.clip(self.objective(ini_state,tra_pos+[0,0,delta],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+        # drda = np.clip(self.objective(ini_state,tra_pos,tra_ang+[delta,0,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[0]**2+5))
+        # drdb = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,delta,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[1]**2+5))
+        # drdc = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,0,delta], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[2]**2+5))
+        drdx = (rp_perturbed[0] - rp_free[0]) / self.beta
+        drdy = (rp_perturbed[1] - rp_free[1]) / self.beta
+        drdz = (rp_perturbed[2] - rp_free[2]) / self.beta
+        drda = (ra_perturbed[0] - ra_free[0]) / self.beta
+        drdb = (ra_perturbed[1] - ra_free[1]) / self.beta
+        drdc = (ra_perturbed[2] - ra_free[2]) / self.beta
+
         drdt =0
         if((self.objective(ini_state,tra_pos,tra_ang,t-0.1)[0]-j)>2):
             drdt = -0.05
@@ -115,6 +146,43 @@ class run_quad:
             drdt = 0.05
         ## return gradient and reward (for deep learning)
         return np.array([-drdx,-drdy,-drdz,-drda,-drdb,-drdc,-drdt,j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path])
+    
+    def grad_computation(self, traj, traj_q, idx, tra_pos,tra_ang,t):
+        real_tra_pos = traj[idx]
+        real_tra_q = traj_q[idx]
+
+
+        self.r_I_gra = SX.sym('rxg', 3,1)
+
+        # q0_g, q1_g, q2_g, q3_g = SX.sym('q0g'), SX.sym('q1g'), SX.sym('q2g'), SX.sym('q3g')
+        # self.q_gra = vertcat(q0_g, q1_g, q2_g, q3_g)
+        self.q_gra = SX.sym('q_g', 4, 1)
+
+        # t_rx_g, t_ry_g, t_rz_g = SX.sym('trxg'), SX.sym('tryg'), SX.sym('trzg')
+        # self.t_r_I_gra = vertcat(t_rx_g, t_ry_g, t_rz_g)
+        self.t_r_I_gra = SX.sym('trxg', 3,1)
+
+        # t_a_g, t_b_g, t_c_g = SX.sym('tag'), SX.sym('tbg'), SX.sym('tcg')
+        # self.t_ang_gra = vertcat(t_a_g, t_b_g, t_c_g)
+        self.t_ang_gra = SX.sym('tag', 3, 1)
+        self.uav1.total_GraCost(self.r_I_gra,self.t_r_I_gra, self.t_ang_gra, self.q_gra )
+        drp = casadi.jacobian(self.uav1.tra_cost_g, self.t_r_I_gra)
+        dra = casadi.jacobian(self.uav1.tra_cost_g, self.t_ang_gra)
+
+        f_p = casadi.Function('gra_p',[self.r_I_gra, self.q_gra, self.t_r_I_gra, self.t_ang_gra],[drp],['rxg','q_g', 'trxg', 'tag'],['rw'])
+        f_a = casadi.Function('gra_p',[self.r_I_gra, self.q_gra, self.t_r_I_gra, self.t_ang_gra],[dra],['rxg','q_g', 'trxg', 'tag'],['rw'])
+
+        real_tra_pos_casadi = casadi.SX([real_tra_pos[0],real_tra_pos[1],real_tra_pos[2]])
+        real_tra_q_casadi = casadi.SX([real_tra_q[0],real_tra_q[1],real_tra_q[2], real_tra_q[3]])
+        nn_tra_pos_casadi = casadi.SX([tra_pos[0],tra_pos[1],tra_pos[2]])
+        nn_tra_q_casadi = casadi.SX([tra_ang[0], tra_ang[1], tra_ang[2]])
+        rp = f_p(real_tra_pos_casadi, real_tra_q_casadi, nn_tra_pos_casadi, nn_tra_q_casadi)
+        ra = f_p(real_tra_pos_casadi, real_tra_q_casadi, nn_tra_pos_casadi, nn_tra_q_casadi)
+
+        return rp, ra
+
+
+
 
     def sol_test(self,ini_state = None,tra_pos =None,tra_ang=None,t=None,Ulast=None):
         tra_ang = np.array(tra_ang)
