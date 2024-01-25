@@ -8,6 +8,7 @@ import sys
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
+import os
 # initialization
 
 
@@ -19,7 +20,8 @@ batch_size = 1 # 100
 learning_rate = 1e-4
 num_cores =1 #5
 
-work_dir = "/home/tlabstaff/storage/LearningAgileFlight_SE3"
+home_dir = os.path.expanduser('~')
+work_dir = os.path.join(home_dir, "storage/LearningAgileFlight_SE3")
 FILE = work_dir + "/nn_pre.pth"
 model = torch.load(FILE)
 Every_reward = np.zeros((num_epochs,batch_size))
@@ -54,16 +56,26 @@ if __name__ == '__main__':
     alpha = float(sys.argv[2])
     beta = float(sys.argv[3])
     gamma = float(sys.argv[4])
+    ep_beta = float(sys.argv[5])
+    ep_bool_str = float(sys.argv[6])
+    if ep_bool_str == 1:
+        ep_bool = 1
+    else:
+        ep_bool = 0
     # reward_weight = 100.0
-    # alpha = 100.0
+    # alpha = 10.0
     # beta = 10.0
     # gamma = 10.0
-    print(f"Loading with reward weight {reward_weight}, alpha {alpha} beta {beta} and gamma {gamma}")
+    # ep_beta = 0.001
+    # ep_bool = 1
+    print(f"Loading with reward weight {reward_weight}, alpha {alpha} beta {beta} gamma {gamma} ep_beta {ep_beta} ep_bool {ep_bool}")
     count = 0
     for k in range(1):
-        work_dir = "/home/tlabstaff/storage/LearningAgileFlight_SE3"
-        load_path = work_dir + "/reward_" + str(reward_weight) + "_gamma_" + str(gamma) + "_beta_" + str(beta) + "_alpha_" + str(alpha) 
-        FILE = load_path + "/nn_deep2_" + str(k)
+        home_dir = os.path.expanduser('~')
+        work_dir = os.path.join(home_dir, "storage/LearningAgileFlight_SE3")
+        load_path = work_dir + "/reward_" + str(reward_weight) + "_gamma_" + str(gamma) + "_beta_" + str(beta) + "_alpha_" + str(alpha) + "_ep_beta_" + str(ep_beta) + "_ep_bool_" + str(ep_bool)
+        # FILE = load_path + "/nn_deep2_" + str(k)
+        FILE = load_path + "/nn_deep2_best"
         if not os.path.isdir(load_path):
             raise Exception('load path is unavailable')
         model = torch.load(FILE)

@@ -5,6 +5,7 @@ from quad_model import *
 from quad_policy import *
 from multiprocessing import Process, Array
 import sys
+import os
 # initialization
 
 
@@ -16,7 +17,8 @@ batch_size = 100 # 100
 learning_rate = 1e-4
 num_cores =20 #5
 
-work_dir = "/home/yanrui/storage/LearningAgileFlight_SE3"
+home_dir = os.path.expanduser('~')
+work_dir = os.path.join(home_dir, "storage/LearningAgileFlight_SE3")
 FILE = work_dir + "/nn_pre.pth"
 model = torch.load(FILE)
 Every_reward = np.zeros((num_epochs,batch_size))
@@ -33,7 +35,7 @@ Every_path = np.zeros((num_epochs,batch_size))
 
 
 # for multiprocessing, obtain the gradient
-def grad(inputs, outputs, gra, reward_weight, alpha, beta, gamma, ep_beta):
+def grad(inputs, outputs, gra, reward_weight, alpha, beta, gamma, ep_beta, ep_bool):
     gate_point = np.array([[-inputs[7]/2,0,1],[inputs[7]/2,0,1],[inputs[7]/2,0,-1],[-inputs[7]/2,0,-1]])
     gate1 = gate(gate_point)
     gate_point = gate1.rotate_y_out(inputs[8])
@@ -42,23 +44,32 @@ def grad(inputs, outputs, gra, reward_weight, alpha, beta, gamma, ep_beta):
     quad1.init_obstacle(gate_point.reshape(12), alpha = alpha, beta=beta, gamma = gamma)
     quad1.setObstacle()
 
-    gra[:] = quad1.sol_gradient(quad1.ini_state,outputs[0:3],outputs[3:6],outputs[6], ep_beta = ep_beta)
+    gra[:] = quad1.sol_gradient(quad1.ini_state,outputs[0:3],outputs[3:6],outputs[6], ep_bool = ep_bool)
 
 if __name__ == '__main__':
-    # reward_weight = float(sys.argv[1])
-    # alpha = float(sys.argv[2])
-    # beta = float(sys.argv[3])
-    # gamma = float(sys.argv[4])
-    reward_weight = 100.0
-    alpha = 10.0
-    beta = 10.0
-    gamma = 10.0
-    ep_beta = 0.01
-    print(f"Running with reward weight {reward_weight}, alpha {alpha} beta {beta} and gamma {gamma}")
+    reward_weight = float(sys.argv[1])
+    alpha = float(sys.argv[2])
+    beta = float(sys.argv[3])
+    gamma = float(sys.argv[4])
+    ep_beta = float(sys.argv[5])
+    ep_bool_str = float(sys.argv[6])
+    if ep_bool_str == 1:
+        ep_bool = 1
+    else:
+        ep_bool = 0
+    # reward_weight = 100.0
+    # alpha = 10.0
+    # beta = 10.0
+    # gamma = 10.0
+    # ep_beta = 0.001
+    # ep_bool = 1
+    print(f"Running with reward weight {reward_weight}, alpha {alpha} beta {beta} gamma {gamma} ep_beta {ep_beta} and ep_bool {ep_bool}")
     for k in range(1):
-        work_dir = "/home/yanrui/storage/LearningAgileFlight_SE3"
+        best_reward = -10000
+        home_dir = os.path.expanduser('~')
+        work_dir = os.path.join(home_dir, "storage/LearningAgileFlight_SE3")
         FILE = work_dir + "/nn_pre.pth"
-        save_path = work_dir + "/reward_" + str(reward_weight) + "_gamma_" + str(gamma) + "_beta_" + str(beta) + "_alpha_" + str(alpha) 
+        save_path = work_dir + "/reward_" + str(reward_weight) + "_gamma_" + str(gamma) + "_beta_" + str(beta) + "_alpha_" + str(alpha) + "_ep_beta_" + str(ep_beta) + "_ep_bool_" + str(ep_bool)
         if not os.path.isdir(save_path):
             os.mkdir(save_path)
         model = torch.load(FILE)
@@ -91,7 +102,7 @@ if __name__ == '__main__':
 
                 #calculate gradient and loss
                 for j in range(num_cores):
-                    p = Process(target=grad,args=(n_inputs[j],n_out[j],n_gra[j], reward_weight, alpha, beta, gamma, ep_beta))
+                    p = Process(target=grad,args=(n_inputs[j],n_out[j],n_gra[j], reward_weight, alpha, beta, gamma, ep_beta, ep_bool))
                     p.start()
                     n_process.append(p)
         
@@ -123,6 +134,8 @@ if __name__ == '__main__':
                     print (f'Iterate: {k}, Epoch [{epoch+1}/{num_epochs}], Step [{(i+1)*num_cores}/{batch_size}], Reward: {n_gra[0][7]:.4f}')
             # change state
             mean_reward = evalue/batch_size # evalue/int(batch_size/num_cores)
+            if mean_reward > best_reward:
+                torch.save(model, save_path + "/nn_deep2_best")
             Mean_r += [mean_reward]
             print('evaluation: ',mean_reward)
             np.save(save_path + '/Iteration',Iteration)

@@ -219,7 +219,7 @@ class Quadrotor:
         self.tra_cost =   self.wrt * self.cost_r_I_t + \
                             self.wqt * self.cost_q_t
         
-    def grad_TraCost(self, r_I_gra, t_r_I_gra, t_ang_gra, q_gra): # transforming Rodrigues to Quaternion is shown in get_input function
+    def grad_TraCost(self, r_I_gra, t_r_I_gra, t_ang_gra, q_gra, traversal_t, idx_t, time_step): # transforming Rodrigues to Quaternion is shown in get_input function
         ## traverse cost
         # traverse position in the world frame
         self.cost_r_I_t_g = dot(r_I_gra - t_r_I_gra, r_I_gra - t_r_I_gra)
@@ -234,12 +234,16 @@ class Quadrotor:
         self.tra_cost_g =   self.wrt * self.cost_r_I_t_g + \
                             self.wqt * self.cost_q_t_g
         
+        weight = 60*casadi.exp(-10*(time_step*idx_t-traversal_t)**2) 
+
+        self.tra_cost_g = self.tra_cost_g * weight
+        
 
         
-    def total_GraCost(self, r_I_gra, t_r_I_gra, t_ang_gra, q_gra):
+    def total_GraCost(self, r_I_gra, t_r_I_gra, t_ang_gra, q_gra, traversal_time, idx_t, time_step):
         # rx_g, ry_g, rz_g = SX.sym('rxg'), SX.sym('ryg'), SX.sym('rzg')
         # self.r_I_gra = vertcat(rx_g, ry_g, rz_g)
-        self.grad_TraCost(r_I_gra, t_r_I_gra, t_ang_gra, q_gra)
+        self.grad_TraCost(r_I_gra, t_r_I_gra, t_ang_gra, q_gra, traversal_time, idx_t, time_step )
 
 
     def Rd2Rp2(self,tra_ang):
@@ -302,7 +306,7 @@ class Quadrotor:
         curr_r_I2B = self.dir_cosine(self.q)
         # curr_r_I2B = self.quaternion_rotation_matrix(self.q)
         # curr_r_I2B_chk = self.quaternion_rotation_matrix(curr_quat)
-        E = mtimes(self.scaledMatrix, curr_r_I2B)
+        E = mtimes(self.scaledMatrix, transpose(curr_r_I2B))
         E = mtimes(curr_r_I2B, E)
 
         # mat_inverse = np.linalg.inv(E)

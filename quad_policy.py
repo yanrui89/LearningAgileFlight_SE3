@@ -33,7 +33,6 @@ class run_quad:
         self.horizon = horizon
         self.reward_weight = reward_weight
         self.beta = ep_beta
-        print(f"ep_beta is {ep_beta}")
 
         # --------------------------- create model1 ----------------------------------------
         self.uav1 = Quadrotor()
@@ -110,40 +109,45 @@ class run_quad:
         return reward, self.collision, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, self.path
     # --------------------------- solution and learning----------------------------------------
     ##solution and demo
-    def sol_gradient(self,ini_state = None,tra_pos =None,tra_ang=None,t=None,Ulast=None):
+    def sol_gradient(self,ini_state = None,tra_pos =None,tra_ang=None,t=None,Ulast=None, ep_bool = 0):
         tra_ang = np.array(tra_ang)
         tra_pos = np.array(tra_pos)
         j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path = self.objective (ini_state,tra_pos,tra_ang,t)
         traj_pos_free = self.traj_pos
         traj_quat_free = self.traj_quaternion
-        trav_idx = t / 0.1
-        pre_idx = int(np.floor(trav_idx))
-        rp_free, ra_free = self.grad_computation(traj_pos_free, traj_quat_free, pre_idx, tra_pos,tra_ang,t)
 
-        j_fix, collision_full_fix, curr_collision_fix, comp1_fix, comp2_fix, collide_fix, curr_delta1_fix, curr_delta2_fix, curr_delta3_fix, curr_delta4_fix, path_fix = self.objective (ini_state,tra_pos,tra_ang,t, incl_ep = 1)
-        traj_pos_perturbed = self.traj_pos
-        traj_quat_perturbed = self.traj_quaternion
-        rp_perturbed, ra_perturbed = self.grad_computation(traj_pos_perturbed, traj_quat_perturbed, pre_idx, tra_pos,tra_ang,t)
-        ## fixed perturbation to calculate the gradient
-        delta = 1e-3
-        # drdx = np.clip(self.objective(ini_state,tra_pos+[delta,0,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
-        # drdy = np.clip(self.objective(ini_state,tra_pos+[0,delta,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
-        # drdz = np.clip(self.objective(ini_state,tra_pos+[0,0,delta],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
-        # drda = np.clip(self.objective(ini_state,tra_pos,tra_ang+[delta,0,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[0]**2+5))
-        # drdb = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,delta,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[1]**2+5))
-        # drdc = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,0,delta], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[2]**2+5))
-        drdx = (rp_perturbed[0] - rp_free[0]) / self.beta
-        drdy = (rp_perturbed[1] - rp_free[1]) / self.beta
-        drdz = (rp_perturbed[2] - rp_free[2]) / self.beta
-        drda = (ra_perturbed[0] - ra_free[0]) / self.beta
-        drdb = (ra_perturbed[1] - ra_free[1]) / self.beta
-        drdc = (ra_perturbed[2] - ra_free[2]) / self.beta
+        if ep_bool == 1:
+            trav_idx = t / 0.1
+            pre_idx = int(np.floor(trav_idx))
+            rp_free, ra_free, rt_free = self.grad_computation(traj_pos_free, traj_quat_free, pre_idx, tra_pos,tra_ang,t)
+            j_fix, collision_full_fix, curr_collision_fix, comp1_fix, comp2_fix, collide_fix, curr_delta1_fix, curr_delta2_fix, curr_delta3_fix, curr_delta4_fix, path_fix = self.objective (ini_state,tra_pos,tra_ang,t, incl_ep = 1)
+            traj_pos_perturbed = self.traj_pos
+            traj_quat_perturbed = self.traj_quaternion
+            rp_perturbed, ra_perturbed, rt_perturbed = self.grad_computation(traj_pos_perturbed, traj_quat_perturbed, pre_idx, tra_pos,tra_ang,t)
+            ## fixed perturbation to calculate the gradient
+            
+            drdx = (rp_perturbed[0] - rp_free[0]) / self.beta
+            drdy = (rp_perturbed[1] - rp_free[1]) / self.beta
+            drdz = (rp_perturbed[2] - rp_free[2]) / self.beta
+            drda = (ra_perturbed[0] - ra_free[0]) / self.beta
+            drdb = (ra_perturbed[1] - ra_free[1]) / self.beta
+            drdc = (ra_perturbed[2] - ra_free[2]) / self.beta
+            drdt = (rt_perturbed - rt_free) / self.beta
 
-        drdt =0
-        if((self.objective(ini_state,tra_pos,tra_ang,t-0.1)[0]-j)>2):
-            drdt = -0.05
-        if((self.objective(ini_state,tra_pos,tra_ang,t+0.1)[0]-j)>2):
-            drdt = 0.05
+        else:
+            delta = 1e-3
+            drdx = np.clip(self.objective(ini_state,tra_pos+[delta,0,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+            drdy = np.clip(self.objective(ini_state,tra_pos+[0,delta,0],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+            drdz = np.clip(self.objective(ini_state,tra_pos+[0,0,delta],tra_ang, t,Ulast)[0] - j,-0.5,0.5)*0.1
+            drda = np.clip(self.objective(ini_state,tra_pos,tra_ang+[delta,0,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[0]**2+5))
+            drdb = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,delta,0], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[1]**2+5))
+            drdc = np.clip(self.objective(ini_state,tra_pos,tra_ang+[0,0,delta], t,Ulast)[0] - j,-0.5,0.5)*(1/(500*tra_ang[2]**2+5))
+
+            drdt =0
+            if((self.objective(ini_state,tra_pos,tra_ang,t-0.1)[0]-j)>2):
+                drdt = -0.05
+            if((self.objective(ini_state,tra_pos,tra_ang,t+0.1)[0]-j)>2):
+                drdt = 0.05
         ## return gradient and reward (for deep learning)
         return np.array([-drdx,-drdy,-drdz,-drda,-drdb,-drdc,-drdt,j, collision_full, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path])
     
@@ -165,23 +169,26 @@ class run_quad:
         # t_a_g, t_b_g, t_c_g = SX.sym('tag'), SX.sym('tbg'), SX.sym('tcg')
         # self.t_ang_gra = vertcat(t_a_g, t_b_g, t_c_g)
         self.t_ang_gra = SX.sym('tag', 3, 1)
-        self.uav1.total_GraCost(self.r_I_gra,self.t_r_I_gra, self.t_ang_gra, self.q_gra )
+
+        self.traversal_time = SX.sym('ttime', 1, 1)
+        self.uav1.total_GraCost(self.r_I_gra,self.t_r_I_gra, self.t_ang_gra, self.q_gra, self.traversal_time, idx, self.dt )
         drp = casadi.jacobian(self.uav1.tra_cost_g, self.t_r_I_gra)
         dra = casadi.jacobian(self.uav1.tra_cost_g, self.t_ang_gra)
+        drt = casadi.jacobian(self.uav1.tra_cost_g, self.traversal_time)
 
-        f_p = casadi.Function('gra_p',[self.r_I_gra, self.q_gra, self.t_r_I_gra, self.t_ang_gra],[drp],['rxg','q_g', 'trxg', 'tag'],['rw'])
-        f_a = casadi.Function('gra_p',[self.r_I_gra, self.q_gra, self.t_r_I_gra, self.t_ang_gra],[dra],['rxg','q_g', 'trxg', 'tag'],['rw'])
+        f_p = casadi.Function('gra_p',[self.r_I_gra, self.q_gra, self.t_r_I_gra, self.t_ang_gra, self.traversal_time],[drp],['rxg','q_g', 'trxg', 'tag', 'ttime'],['rwp'])
+        f_a = casadi.Function('gra_a',[self.r_I_gra, self.q_gra, self.t_r_I_gra, self.t_ang_gra, self.traversal_time],[dra],['rxg','q_g', 'trxg', 'tag', 'ttime'],['rwa'])
+        f_t = casadi.Function('gra_t',[self.r_I_gra, self.q_gra, self.t_r_I_gra, self.t_ang_gra, self.traversal_time],[drt],['rxg','q_g', 'trxg', 'tag', 'ttime'],['rwt'])
 
         real_tra_pos_casadi = casadi.SX([real_tra_pos[0],real_tra_pos[1],real_tra_pos[2]])
         real_tra_q_casadi = casadi.SX([real_tra_q[0],real_tra_q[1],real_tra_q[2], real_tra_q[3]])
         nn_tra_pos_casadi = casadi.SX([tra_pos[0],tra_pos[1],tra_pos[2]])
         nn_tra_q_casadi = casadi.SX([tra_ang[0], tra_ang[1], tra_ang[2]])
-        rp = f_p(real_tra_pos_casadi, real_tra_q_casadi, nn_tra_pos_casadi, nn_tra_q_casadi)
-        ra = f_p(real_tra_pos_casadi, real_tra_q_casadi, nn_tra_pos_casadi, nn_tra_q_casadi)
+        rp = f_p(real_tra_pos_casadi, real_tra_q_casadi, nn_tra_pos_casadi, nn_tra_q_casadi, t)
+        ra = f_a(real_tra_pos_casadi, real_tra_q_casadi, nn_tra_pos_casadi, nn_tra_q_casadi, t)
+        rt = f_t(real_tra_pos_casadi, real_tra_q_casadi, nn_tra_pos_casadi, nn_tra_q_casadi, t)
 
-        return rp, ra
-
-
+        return rp, ra, rt
 
 
     def sol_test(self,ini_state = None,tra_pos =None,tra_ang=None,t=None,Ulast=None):

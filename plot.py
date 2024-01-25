@@ -2,15 +2,18 @@ import numpy as np
 import os
 import matplotlib.pyplot as plt
 
-file_path = '/home/tlabstaff/storage/LearningAgileFlight_SE3'
-reward_weight = 50.0
+home_dir = os.path.expanduser('~')
+file_path = os.path.join(home_dir, "storage/LearningAgileFlight_SE3")
+reward_weight = 100.0
 gamma = 10.0
 alpha = 10.0
 beta = 10.0
-folder_name = "reward_" + str(reward_weight) + "_gamma_" + str(gamma) + "_beta_" + str(beta) + "_alpha_" + str(alpha)
+ep_beta = 0.00001
+ep_bool = 1
+folder_name = "reward_" + str(reward_weight) + "_gamma_" + str(gamma) + "_beta_" + str(beta) + "_alpha_" + str(alpha) + "_ep_beta_" + str(ep_beta) + "_ep_bool_" + str(ep_bool)
 full_folder_path = os.path.join(file_path, folder_name)
 
-total_iteration = 4
+total_iteration = 1
 
 file_name = ['Every_collide',
              'Every_comp1',
@@ -42,7 +45,11 @@ for curr_file in file_name:
             avg = np.average(a, axis=1)
         else:
             avg = a
-        ax[iter].plot(np.arange(a.shape[0]),avg)
+
+        if total_iteration == 1:
+            ax.plot(np.arange(a.shape[0]),avg)
+        else:
+            ax[iter].plot(np.arange(a.shape[0]),avg)
         # ax[iter].set_ylim([-10e5, 10])
 
     plt.show()
