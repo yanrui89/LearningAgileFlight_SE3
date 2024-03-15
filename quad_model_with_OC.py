@@ -201,6 +201,12 @@ class QuadrotorOC:
         self.wingrad = wingrad
         self.height = 0.3
         self.R_max = 100.0
+        plane_ref_vect1 = point2 - point1
+        plane_ref_vect2 = point3 - point1
+        
+        self.plane_norm = np.cross(plane_ref_vect1, plane_ref_vect2)
+        self.area = casadi.sqrt(casadi.dot((self.point2 - self.point1), (self.point2 - self.point1)) * casadi.dot((self.point3 - self.point2), (self.point3 - self.point2)))
+        self.plane_norm_unit = self.plane_norm / np.linalg.norm(self.plane_norm)
 
     def collis_det(self, vert_traj, quat, trav_t, verbose):
         ## define the state whether find corresponding plane
@@ -212,7 +218,7 @@ class QuadrotorOC:
         # judge whether they belong to plane1 and calculate the distance
         curr_quat = quat[pre_idx,:]
 
-        reward_data = self.collis_det_ep(X, curr_quat, verbose)
+        reward_data = self.collis_det_ep2(X, curr_quat, verbose)
 
         if verbose == True:
             col_reward, curr_col1, curr_col2,co, curr_delta1, curr_delta2, curr_delta3, curr_delta4 = reward_data
@@ -287,6 +293,92 @@ class QuadrotorOC:
             return collision, curr_col1, curr_col2, co, curr_delta1, curr_delta2, curr_delta3, curr_delta4
         else:
             return collision
+        
+    def collis_det_ep2(self, X, curr_quat, verbose):
+        
+        #project the position to the plane and check 2 things. How far it is and if it is within the polygon
+        rel_dist = X - self.point1
+        rel_dist_norm = casadi.dot(rel_dist, self.plane_norm_unit)
+        proj_point = (rel_dist - (rel_dist_norm * self.plane_norm_unit)) + self.point1
+
+        total_area = 0
+        for i in range(4):
+            j = (i+1)% 4
+            area = self.area_of_triangle(self.points[i][0], self.points[i][2], self.points[j][0], self.points[j][2], proj_point[0], proj_point[2])
+            total_area += area
+
+        area_ratio = total_area / self.area   
+        
+        
+        
+    
+        self.scaledMatrix = casadi.SX([[self.wingrad,0,0],[0,self.wingrad, 0],[0,0,self.height]])
+        # self.scaledMatrix = np.diag([self.wingrad, self.wingrad, self.height])  
+        curr_r_I2B = self.dir_cosine(curr_quat)
+        # curr_r_I2B = self.quaternion_rotation_matrix(self.q)
+        # curr_r_I2B_chk = self.quaternion_rotation_matrix(curr_quat)
+        E = mtimes(self.scaledMatrix, transpose(curr_r_I2B))
+        E = mtimes(curr_r_I2B, E)
+
+        # curr_delta11 = mtimes(casadi.inv(E), (self.midpoint1 - X))
+        # curr_delta1 = casadi.sqrt(curr_delta11[0]*curr_delta11[0] + curr_delta11[1]*curr_delta11[1] + curr_delta11[2]*curr_delta11[2])
+        # curr_delta22 = mtimes(casadi.inv(E), (self.midpoint2 - X))
+        # curr_delta2 = casadi.sqrt(curr_delta22[0]*curr_delta22[0] + curr_delta22[1]*curr_delta22[1] + curr_delta22[2]*curr_delta22[2])
+        # curr_delta33 = mtimes(casadi.inv(E), (self.midpoint3 - X))
+        # curr_delta3 = casadi.sqrt(curr_delta33[0]*curr_delta33[0] + curr_delta33[1]*curr_delta33[1] + curr_delta33[2]*curr_delta33[2])
+        # curr_delta44 = mtimes(casadi.inv(E), (self.midpoint4 - X))
+        # curr_delta4 = casadi.sqrt(curr_delta44[0]*curr_delta44[0] + curr_delta44[1]*curr_delta44[1] + curr_delta44[2]*curr_delta44[2])
+        curr_col1 = 0
+        curr_col2 = 0
+        co = 0
+
+        for i in range(4):
+            idx_start = i
+            idx_end = (i+1)% 4
+            point_start = self.points[idx_start]
+            point_end = self.points[idx_end]
+            diff_dist = (point_end - point_start)
+            diff_norm = casadi.sqrt(diff_dist[0]*diff_dist[0] + diff_dist[1]*diff_dist[1] + diff_dist[2]*diff_dist[2])
+            unit_diff = diff_dist/diff_norm
+            interval_diff_norm = diff_norm / 10
+            for j in range(10):
+                curr_pt = interval_diff_norm*j*unit_diff + point_start
+                curr_delta_int = mtimes(casadi.inv(E), (curr_pt - X))
+                curr_delta = casadi.sqrt(curr_delta_int[0]*curr_delta_int[0] + curr_delta_int[1]*curr_delta_int[1] + curr_delta_int[2]*curr_delta_int[2])
+                # curr_col1 += self.alpha  * casadi.exp(self.beta*(area_ratio)) + self.gamma * casadi.power(rel_dist_norm, 2)
+                curr_col2 = self.alpha * casadi.exp(self.beta*(1 - curr_delta))
+                if verbose == True:
+                    if curr_delta < 1:
+                        co += 0
+        
+            if verbose == True:
+                curr_delta1 = curr_delta
+                curr_delta2 = curr_delta
+                curr_delta3 = curr_delta
+                curr_delta4 = curr_delta
+                # if curr_delta < 1:
+                #     co += 1
+                    
+                # if curr_delta2 < 1:
+                #     co += 1
+                # if curr_delta3 < 1:
+                #     co+=1
+                # if curr_delta4 < 1:
+                #     co += 1
+
+        curr_col1 += self.alpha  * casadi.exp(self.beta*(area_ratio)) + self.gamma * casadi.power(rel_dist_norm, 2)
+        # curr_col1 = (self.gamma  * casadi.power(curr_delta1, 2)) + (self.gamma  * casadi.power(curr_delta2, 2)) + (self.gamma  * casadi.power(curr_delta3, 2)) + (self.gamma  * casadi.power(curr_delta4, 2)) #+ (self.gamma  * np.power(curr_delta11, 2)) + (self.gamma  * np.power(curr_delta22, 2)) + (self.gamma  * np.power(curr_delta33, 2)) + (self.gamma  * np.power(curr_delta44, 2))
+        # curr_col2 = (self.alpha * casadi.exp(self.beta*(1 - curr_delta1))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta2))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta3))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta4))) #+ (self.alpha * np.exp(self.beta*(1 - curr_delta11))) + (self.alpha * np.exp(self.beta*(1 - curr_delta22))) + (self.alpha * np.exp(self.beta*(1 - curr_delta33))) + (self.alpha * np.exp(self.beta*(1 - curr_delta44)))
+
+        collision = curr_col1 + curr_col2
+
+        if verbose == True:
+            return collision, curr_col1, curr_col2, co, curr_delta1, curr_delta2, curr_delta3, curr_delta4
+        else:
+            return collision
+        
+    def area_of_triangle(self, x1, y1, x2, y2, x3, y3):
+        return 0.5 * abs(x1 *(y2-y3) + x2* (y3 - y1) + x3 * (y1 - y2))
         
     def collis_det_ep_trial(self,curr_quat):
 
