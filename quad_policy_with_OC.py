@@ -89,7 +89,7 @@ class run_quad_withOC:
         reward_data = self.uav1.collis_det(traj_pos, traj_quaternion, t, verbose)
         for p in range(4):
             self.path += np.dot(traj[self.horizon-1-p,0:3]-self.goal_pos, traj[self.horizon-1-p,0:3]-self.goal_pos)
-        reward = 1 * reward_data[0] - (self.reward_weight * self.path)
+        reward = 1 * reward_data[0] + (self.reward_weight * self.path)
         if verbose == True:
             return [reward] + list(reward_data) + [self.path], traj, traj_pos, traj_quaternion
         else:
@@ -149,7 +149,7 @@ class run_quad_withOC:
         ## return gradient and reward (for deep learning)
         return np.array([drdx,drdy,drdz,drda,drdb,drdc,drdt,j, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path])
     
-    def set_axes_equal(ax):
+    def set_axes_equal(self,ax):
         """
         Make axes of 3D plot have equal scale so that spheres appear as spheres,
         cubes as cubes, etc.
@@ -176,6 +176,8 @@ class run_quad_withOC:
         ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
         ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
         ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+
+        return ax
     
     def grad_computation(self, traj, traj_q, idx, tra_pos,tra_ang,t):
 
@@ -228,8 +230,10 @@ class run_quad_withOC:
         tra_pos = np.array(tra_pos)
         reward_data, traj_test,traj_pos_test, traj_quat_test = self.objective (ini_state,tra_pos,tra_ang,t)
         j, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path = reward_data
+        self.plot_pos(traj_pos_test, t, tra_pos, traj_quat_test)
+        self.plot_pos_animate2(traj_pos_test, t, tra_pos, traj_quat_test)
 
-        return np.array([j, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path]), traj_test
+        return np.array([j, curr_collision, comp1, comp2, collide, curr_delta1, curr_delta2, curr_delta3, curr_delta4, path]), traj_pos_test, traj_quat_test, tra_pos, tra_ang
     
     def plot(self, Traj, t, tra_pos, tra_quat, tra_ang=None):
         fig = plt.figure()
@@ -258,6 +262,114 @@ class run_quad_withOC:
         ax.set_ylabel('Y Label')
         ax.set_zlabel('Z Label')
         self.set_axes_equal(ax)
+
+    def plot_pos(self, Traj, t, tra_pos, traj_quat):
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        GatePoints = np.array([self.point1, self.point2, self.point3, self.point4, self.point1])
+        ax.scatter(Traj[:,0], Traj[:,1], Traj[:,2])
+        ax.plot3D(GatePoints[:,0], GatePoints[:,1], GatePoints[:,2])
+        trav_idx = t / 0.1
+        pre_idx = int(np.floor(trav_idx))
+        intersect = Traj[pre_idx]
+
+        ax.scatter(intersect[0],intersect[1], intersect[2], c="red")
+        ax.scatter(self.goal_pos[0],self.goal_pos[1], self.goal_pos[2], c="green")
+        ax.scatter(tra_pos[0],tra_pos[1], tra_pos[2], c="green")
+
+        tt = int(round(t *10))
+        r = R.from_quat(np.array([traj_quat[tt][1],traj_quat[tt][2],traj_quat[tt][3],traj_quat[tt][0]]) )
+        new_z = np.matmul(r.as_matrix(), np.array([0,0,1]))
+        new_y = np.matmul(r.as_matrix(), np.array([0,1,0]))
+        new_x = np.matmul(r.as_matrix(), np.array([1,0,0]))
+
+        new_z_pt = intersect + new_z
+        new_y_pt = intersect + new_y
+        new_x_pt = intersect + new_x
+
+        ax.plot(xs=[intersect[0], new_z_pt[0]], ys=[intersect[1],new_z_pt[1]],zs=[intersect[2],new_z_pt[2]], c='b')
+        ax.plot(xs=[intersect[0], new_y_pt[0]], ys=[intersect[1],new_y_pt[1]],zs=[intersect[2],new_y_pt[2]], c='g')
+        ax.plot(xs=[intersect[0], new_x_pt[0]], ys=[intersect[1],new_x_pt[1]],zs=[intersect[2],new_x_pt[2]], c='r')
+
+        self.set_axes_equal(ax)
+
+        plt.show()
+
+    def plot_pos_animate(self, Traj, t, tra_pos, traj_quat):
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        GatePoints = np.array([self.point1, self.point2, self.point3, self.point4, self.point1])
+        ax.plot3D(GatePoints[:,0], GatePoints[:,1], GatePoints[:,2])
+        trav_idx = t / 0.1
+        pre_idx = int(np.floor(trav_idx))
+        intersect = Traj[pre_idx]
+
+        ax.scatter(intersect[0],intersect[1], intersect[2], c="red")
+        ax.scatter(self.goal_pos[0],self.goal_pos[1], self.goal_pos[2], c="green", s=20)
+        ax.scatter(tra_pos[0],tra_pos[1], tra_pos[2], c="green")
+        self.set_axes_equal(ax)
+
+        for i in range(Traj.shape[0]):
+            ax.scatter(Traj[i,0], Traj[i,1], Traj[i,2])
+            plt.draw()
+            plt.pause(0.5)
+            if i == pre_idx:
+                tt = int(round(t *10))
+                r = R.from_quat(np.array([traj_quat[tt][1],traj_quat[tt][2],traj_quat[tt][3],traj_quat[tt][0]]) )
+                new_z = np.matmul(r.as_matrix(), np.array([0,0,1]))
+                new_y = np.matmul(r.as_matrix(), np.array([0,1,0]))
+                new_x = np.matmul(r.as_matrix(), np.array([1,0,0]))
+
+                new_z_pt = intersect + (new_z / np.linalg.norm(new_z))
+                new_y_pt = intersect + (new_y / np.linalg.norm(new_y))
+                new_x_pt = intersect + (new_x / np.linalg.norm(new_x))
+
+                ax.plot(xs=[intersect[0], new_z_pt[0]], ys=[intersect[1],new_z_pt[1]],zs=[intersect[2],new_z_pt[2]], c='b')
+                ax.plot(xs=[intersect[0], new_y_pt[0]], ys=[intersect[1],new_y_pt[1]],zs=[intersect[2],new_y_pt[2]], c='g')
+                ax.plot(xs=[intersect[0], new_x_pt[0]], ys=[intersect[1],new_x_pt[1]],zs=[intersect[2],new_x_pt[2]], c='r')
+            
+            self.set_axes_equal(ax)
+
+        plt.show()
+
+    def plot_pos_animate2(self, Traj, t, tra_pos, traj_quat):
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        GatePoints = np.array([self.point1, self.point2, self.point3, self.point4, self.point1])
+        ax.plot3D(GatePoints[:,0], GatePoints[:,1], GatePoints[:,2])
+        trav_idx = t / 0.1
+        pre_idx = int(np.floor(trav_idx))
+        intersect = Traj[pre_idx]
+
+        ax.scatter(intersect[0],intersect[1], intersect[2], c="red")
+        ax.scatter(self.goal_pos[0],self.goal_pos[1], self.goal_pos[2], c="green", s=20)
+        ax.scatter(tra_pos[0],tra_pos[1], tra_pos[2], c="green")
+        self.set_axes_equal(ax)
+
+        for i in range(Traj.shape[0]):
+            ax.scatter(Traj[i,0], Traj[i,1], Traj[i,2], c='b')
+            plt.draw()
+            
+            r = R.from_quat(np.array([traj_quat[i][1],traj_quat[i][2],traj_quat[i][3],traj_quat[i][0]]) )
+            new_z = np.matmul(r.as_matrix(), np.array([0,0,1]))
+            new_y = np.matmul(r.as_matrix(), np.array([0,1,0]))
+            new_x = np.matmul(r.as_matrix(), np.array([1,0,0]))
+
+            new_z_pt = Traj[i,:] + 0.1*(new_z / np.linalg.norm(new_z))
+            new_y_pt = Traj[i,:] + 0.1*(new_y / np.linalg.norm(new_y))
+            new_x_pt = Traj[i,:] + 0.1*(new_x / np.linalg.norm(new_x))
+
+            ax.plot(xs=[Traj[i,0], new_z_pt[0]], ys=[Traj[i,1],new_z_pt[1]],zs=[Traj[i,2],new_z_pt[2]], c='b')
+            ax.plot(xs=[Traj[i,0], new_y_pt[0]], ys=[Traj[i,1],new_y_pt[1]],zs=[Traj[i,2],new_y_pt[2]], c='g')
+            ax.plot(xs=[Traj[i,0], new_x_pt[0]], ys=[Traj[i,1],new_x_pt[1]],zs=[Traj[i,2],new_x_pt[2]], c='r')
+            
+            self.set_axes_equal(ax)
+            plt.pause(0.5)
+
+        plt.show()
+
+
+    
     
     # def optimize(self, t):
     #     tra_pos = self.obstacle1.centroid

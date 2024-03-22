@@ -174,7 +174,7 @@ class QuadrotorOC:
         self.setTraCost()
 
     def init_eptrajloss(self):
-        self.eptrajcost = self.collis_det_ep(self.r_I, self.q, False)
+        self.eptrajcost = self.collis_det_ep2(self.r_I, self.q, False)
         self.ep_cost = self.weptl * self.eptrajcost
         self.setEpCost()
 
@@ -263,7 +263,7 @@ class QuadrotorOC:
                 curr_delta_int = mtimes(casadi.inv(E), (curr_pt - X))
                 curr_delta = casadi.sqrt(curr_delta_int[0]*curr_delta_int[0] + curr_delta_int[1]*curr_delta_int[1] + curr_delta_int[2]*curr_delta_int[2])
                 curr_col1 += self.gamma  * casadi.power(curr_delta, 2)
-                curr_col2 = self.alpha * casadi.exp(self.beta*(1 - curr_delta))
+                curr_col2 += self.alpha * casadi.exp(self.beta*(1 - curr_delta))
                 if verbose == True:
                     if curr_delta < 1:
                         co += 0
@@ -346,7 +346,7 @@ class QuadrotorOC:
                 curr_delta_int = mtimes(casadi.inv(E), (curr_pt - X))
                 curr_delta = casadi.sqrt(curr_delta_int[0]*curr_delta_int[0] + curr_delta_int[1]*curr_delta_int[1] + curr_delta_int[2]*curr_delta_int[2])
                 # curr_col1 += self.alpha  * casadi.exp(self.beta*(area_ratio)) + self.gamma * casadi.power(rel_dist_norm, 2)
-                curr_col2 = self.alpha * casadi.exp(self.beta*(1 - curr_delta))
+                curr_col2 += self.alpha * casadi.exp(self.beta*(1 - curr_delta))
                 if verbose == True:
                     if curr_delta < 1:
                         co += 0
@@ -366,7 +366,7 @@ class QuadrotorOC:
                 # if curr_delta4 < 1:
                 #     co += 1
 
-        curr_col1 += self.alpha  * casadi.exp(self.beta*(area_ratio)) + self.gamma * casadi.power(rel_dist_norm, 2)
+        curr_col1 += self.alpha  * casadi.exp(self.beta*(area_ratio - 1)) + self.gamma * casadi.power(rel_dist_norm, 2)
         # curr_col1 = (self.gamma  * casadi.power(curr_delta1, 2)) + (self.gamma  * casadi.power(curr_delta2, 2)) + (self.gamma  * casadi.power(curr_delta3, 2)) + (self.gamma  * casadi.power(curr_delta4, 2)) #+ (self.gamma  * np.power(curr_delta11, 2)) + (self.gamma  * np.power(curr_delta22, 2)) + (self.gamma  * np.power(curr_delta33, 2)) + (self.gamma  * np.power(curr_delta44, 2))
         # curr_col2 = (self.alpha * casadi.exp(self.beta*(1 - curr_delta1))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta2))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta3))) + (self.alpha * casadi.exp(self.beta*(1 - curr_delta4))) #+ (self.alpha * np.exp(self.beta*(1 - curr_delta11))) + (self.alpha * np.exp(self.beta*(1 - curr_delta22))) + (self.alpha * np.exp(self.beta*(1 - curr_delta33))) + (self.alpha * np.exp(self.beta*(1 - curr_delta44)))
 
@@ -378,7 +378,9 @@ class QuadrotorOC:
             return collision
         
     def area_of_triangle(self, x1, y1, x2, y2, x3, y3):
-        return 0.5 * abs(x1 *(y2-y3) + x2* (y3 - y1) + x3 * (y1 - y2))
+        temp_a = 0.5 * (x1 *(y2-y3) + x2* (y3 - y1) + x3 * (y1 - y2))
+        temp_b = temp_a * temp_a
+        return casadi.sqrt(temp_b)
         
     def collis_det_ep_trial(self,curr_quat):
 
